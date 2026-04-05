@@ -1,0 +1,13 @@
+{
+  "name": "send-notification",
+  "version": "1.0.0",
+  "description": "Send push notifications to all registered devices",
+  "main": "index.ts",
+  "scripts": {
+    "start": "deno run --allow-net --allow-env --allow-read index.ts"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.39.0",
+    "firebase-admin": "^11.11.0"
+  }
+}
