@@ -1,7 +1,6 @@
 import 'dart:developer' as developer;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
-import '../models/quote.dart';
 import '../constants.dart';
 
 class SupabaseService {
@@ -38,61 +37,4 @@ class SupabaseService {
     }
   }
 
-  /// Fetch a list of quotes from the `quotes` table. Returns empty list on no-data.
-  Future<List<Quote>> fetchQuotes({int limit = 100}) async {
-    if (client == null) throw Exception('Supabase not initialized');
-    try {
-      // Newer postgrest client returns the parsed body directly when awaited.
-      final dynamic raw = await client!.from('quotes').select().limit(limit);
-      if (raw == null) return [];
-
-      // The postgrest client may return a List of maps or a Map wrapping a 'data' list.
-      if (raw is List<dynamic>) {
-        final list = raw.cast<Map<String, dynamic>>();
-        return list
-            .map((m) => Quote.fromMap(Map<String, dynamic>.from(m)))
-            .toList();
-      }
-
-      if (raw is Map<String, dynamic>) {
-        final inner = raw['data'];
-        if (inner is List) {
-          final list = inner.cast<Map<String, dynamic>>();
-          return list
-              .map((m) => Quote.fromMap(Map<String, dynamic>.from(m)))
-              .toList();
-        }
-      }
-
-      // Unknown shape — return empty list but log for debugging
-      developer.log('Unexpected Supabase response shape: ${raw.runtimeType}');
-      return [];
-    } catch (e, st) {
-      developer.log('fetchQuotes error: $e', stackTrace: st);
-      rethrow;
-    }
-  }
-
-  Future<Quote?> fetchRandomQuote() async {
-    final list = await fetchQuotes(limit: 200);
-    if (list.isEmpty) return null;
-    list.shuffle();
-    return list.first;
-  }
-
-  /// Save a new quote to the database
-  Future<bool> saveQuote(String text, String author) async {
-    if (client == null) {
-      await init();
-      if (client == null) return false;
-    }
-
-    try {
-      await client!.from('quotes').insert({'text': text, 'author': author});
-      return true;
-    } catch (e, st) {
-      developer.log('saveQuote error: $e', stackTrace: st);
-      return false;
-    }
-  }
 }

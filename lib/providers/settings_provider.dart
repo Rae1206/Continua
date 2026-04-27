@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../services/firebase_messaging_service.dart';
+import '../services/notification_controller.dart';
 
 class SettingsState {
   final int intervalSeconds;
@@ -62,7 +63,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setInt(_prefsKeyInterval, seconds);
 
-    // Actualizar en Supabase (tabla devices)
+    // Programar alarma local (AlarmManager) - más confiable que FCM en muchos Android
+    if (state.notificationsEnabled) {
+      await NotificationController.scheduleAlarm(seconds);
+    }
+
+    // Actualizar registro del dispositivo en Supabase (para cuando vuelva FCM)
     if (state.notificationsEnabled) {
       await FirebaseMessagingService.updateIntervalPreference(seconds);
     }

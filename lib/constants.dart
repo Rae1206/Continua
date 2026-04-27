@@ -1,2 +1,3 @@
-const String kSupabaseUrl = 'https://fyvxjooydebbpjcmxeev.supabase.co';
-const String kSupabaseAnonKey = 'sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM';
+const String kSupabaseUrl = 'https://oezlfzzbsfwaujpwecpk.supabase.co';
+const String kSupabaseAnonKey =
+    'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lemxmenpic2Z3YXVqcHdlY3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMzAyODYsImV4cCI6MjA5MjgwNjI4Nn0.5PJNICEbf321blyYONUEVvws9H3frQ5gqaeCeiRwafc';

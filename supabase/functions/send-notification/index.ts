@@ -15,47 +15,18 @@ Deno.serve(async (req) => {
 
   try {
     const { createClient } = await import('npm:@supabase/supabase-js@2')
+    const bibleVerse = await fetchRandomVerse()
 
     // ============================================
     // OBTENER ACCESS TOKEN DESDE SERVICE ACCOUNT
     // ============================================
-    
-    // Secrets de Firebase (hardcodeados para este proyecto)
-    const serviceAccount = {
-      project_id: 'keepgoing-3344f',
-      private_key_id: '0efa9b8d248ea46467dfb3210f17e6ca31b3ee7f',
-      private_key: [
-        '-----BEGIN PRIVATE KEY-----',
-        'MIIEvAIBADANBgkqhkiG9w0BAQEFAASCBKYwggSiAgEAAoIBAQCeG32X9fj8lWzg',
-        '+wO50RhdpI2L3P+baVZ77w7OZIb8iBegYEXVzctAJzpaHo+GnY9pdvbcJ8rhq5qK',
-        'S/EqFRaTENGv2kKYFQUnCGYIJjWRRf56BMxi/ViQEEjioXf8MXrRN8cmb4Zsp6ex',
-        'H8Qvyy/cp5Er5RUNCb1S4lKLoTPBsar+Y3OlnDXkQ/Ow7xazgU60su6v7D04DDx2',
-        'D1SPSX6/9tT4SFNWX60dwTkp6oWMPI1BQRJtBVAwWRQCcCRdgrO5bIfj8CKSapvT',
-        'J8Y8q9rb2STMuoCLa6/SzXy44EACvtMnUsIzrBU1V9J67pKZIyEaw6Y+7pT1EbCQ',
-        'iGkDATUhAgMBAAECggEAMduUauenmSsbtwShA6cyylDaS/koZ587pQBZSG99+8OE',
-        'w8+oJghr6DKWnZWWiApGj6jyprErsqdVJ/hTuAQHZt/+Z7hpmKDES69D0Z0O9l0+',
-        'psa9lxeyJlfkTAdEGXSW+MPgmre/iaMC6AGO8c1erfPvfQqT7VUdbTYudpaihhkc',
-        'YCOL0bQAzuPEYUX34ljZfd1xSjxNMptn2QnQR0Y209Aizu20PdjA1OWaUvQryOmT',
-        'SeGhl8m0P4PMNn95voRGeHGtBDb0oclxxUb6H60GdsY9N5aGGLrxI9U6eISHBDaM',
-        'ciaP4yNYfRB+bpqF9Zs6dvCFdSUg+HxjyQ40ZoP+qwKBgQDLuOwkTpVL2M79Dsir',
-        '5n3kDZY9RxJ9+IvFHBY/gGEglfQvkgcO2NEHAtf4QwSZH88QZr1DtesDaf1ELAj3',
-        '9WDKFBnJfOho4Zx9A/Uykhx8soCY8tVayjlJ0aTe2ja1R5QYi2pQEHhyY2GWhv01',
-        'Hy4kw+QA6+0t86OdaIK31KjqVwKBgQDGrf8S+VtzVVh4MmBGnSo3HpAI0uVvaeh5',
-        '0socvk972YTPKxMw9h8y866EUyM0y3IGbrj0f0hH3eZidgpqRlPbpthT6T0RB56w',
-        'Zkf4gi6fQKTIjPFfESygrE7Yk2qQoweXN2EtXH7sgBUr15bOyWM2WLUEO54MpuZe',
-        'ppnWW8UhRwKBgDVzaGnCQIOs9+oHdfk8OW2bbv7W5fAtRSbLTr8MhO9SyMWub7Gi',
-        'i31mbpnRo6Q1Z1OrUR8x3N6BcZTwZM4CEIoUqgtmfWf/Qdq/Lhc9pMHG59y5Yec3',
-        'Rb6rhbF+2XnItP+XnKYzHBcPIiyncEn+y1GUH/9p50n2Mch8AkgPQN5zAoGALrqB',
-        'wb6wSaILGsoOZs1UPn6LteeUWu335Z80Nip0m1Z/rBIfg2Z/1AYIR8sd/q7S9LxZ',
-        '9/dv0qdYJlRJAtHjq0fEnYe/+x9lrWuBBevod0BHAXxU0N1DN88PBFU3vSj7Ag/e',
-        'ZULZ/1nooNUl/SDUmtWmTYaQF72xdRWOHSKcbMUCgYAB0aZ7fddymLFQur4IVN3Q',
-        'oAovUDb9Dz8EMFBU/U2vbVlXxFc8ZZRIAT6OgCz7f6/P+lQXTdh9muH7wVKYQkiX',
-        '4YXWUBKoaBsNJ5KKuI/NhhfjUBDc7odykLRx/cEzC9bmYv2H84POHQZl3dXxB8QD',
-        'x4z4dH40OheI1/7Rja0T4Q==',
-        '-----END PRIVATE KEY-----'
-      ].join('\n'),
-      client_email: 'firebase-adminsdk-fbsvc@keepgoing-3344f.iam.gserviceaccount.com'
+
+    const serviceAccountJson = Deno.env.get('FIREBASE_SERVICE_ACCOUNT_JSON')
+    if (!serviceAccountJson) {
+      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON no configurado')
     }
+
+    const serviceAccount = JSON.parse(serviceAccountJson)
     
     const accessToken = await getAccessTokenFromServiceAccount(serviceAccount)
 
@@ -65,7 +36,7 @@ Deno.serve(async (req) => {
 
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+      Deno.env.get('SUPABASE_ANON_KEY')!
     )
 
     const now = new Date()
@@ -112,31 +83,18 @@ Deno.serve(async (req) => {
       )
     }
 
-    // 3. Obtener quote aleatoria
-    const { data: quotes, error: quoteError } = await supabase
-      .from('quotes')
-      .select('id, text, author')
-      .limit(10)
-
-    if (quoteError || !quotes || quotes.length === 0) {
-      throw new Error('No hay quotes disponibles')
-    }
-
-    const quote = quotes[Math.floor(Math.random() * quotes.length)]
-    console.log('Quote seleccionada:', quote.text.substring(0, 30) + '...')
-
     // 4. Enviar notificaciones usando FCM v1 API
     const fcmUrl = 'https://fcm.googleapis.com/v1/projects/keepgoing-3344f/messages:send'
 
     const results = await Promise.allSettled(
       devicesToNotify.map(async (device: any) => {
-        const title = quote.author 
-          ? `Quote de ${quote.author}` 
+        const title = bibleVerse.reference
+          ? `Versículo de ${bibleVerse.reference}`
           : 'Keep Going 💪'
         
-        const body = quote.text.length > 100 
-          ? quote.text.substring(0, 100) + '...' 
-          : quote.text
+        const body = bibleVerse.text.length > 100 
+          ? bibleVerse.text.substring(0, 100) + '...'
+          : bibleVerse.text
 
         try {
           const fcmResponse = await fetch(fcmUrl, {
@@ -153,8 +111,10 @@ Deno.serve(async (req) => {
                   body
                 },
                 data: {
-                  type: 'quote_notification',
-                  quote_id: quote.id,
+                  type: 'verse_notification',
+                  text: bibleVerse.text,
+                  author: bibleVerse.reference,
+                  reference: bibleVerse.reference,
                   click_action: 'FLUTTER_NOTIFICATION_CLICK'
                 },
                 android: {
@@ -215,10 +175,9 @@ Deno.serve(async (req) => {
     return new Response(
       JSON.stringify({
         message: `Notificaciones: ${successful} enviadas, ${failed} fallidas`,
-        quote: {
-          id: quote.id,
-          text: quote.text.substring(0, 50),
-          author: quote.author
+        verse: {
+          reference: bibleVerse.reference,
+          text: bibleVerse.text.substring(0, 50)
         },
         devices_notified: successful,
         devices_skipped: failed,
@@ -242,6 +201,73 @@ Deno.serve(async (req) => {
     )
   }
 })
+
+async function fetchRandomVerse() {
+  const fallback = {
+    reference: 'Filipenses 4:13',
+    text: 'Todo lo puedo en Cristo que me fortalece.'
+  }
+
+  try {
+    const response = await fetch('https://esbiblia.net/api/random/?v=rvr')
+    if (!response.ok) return fallback
+
+    const data = await response.json()
+    const verse = data?.verses?.[0]
+    const text = cleanVerseText(verse?.text?.toString?.() ?? '')
+    const bookId = verse?.book_id?.toString?.() ?? ''
+    const bookName = verse?.book_name?.toString?.() ?? ''
+    const chapter = verse?.chapter?.toString?.() ?? ''
+    const verseNumber = verse?.verse?.toString?.() ?? ''
+    const reference = buildReference(data?.reference?.toString?.() ?? '', bookName, bookId, chapter, verseNumber)
+
+    if (!text) return fallback
+
+    return {
+      reference: reference,
+      text,
+    }
+  } catch (_) {
+    return fallback
+  }
+}
+
+function buildReference(apiReference: string, bookName: string, bookId: string, chapter: string, verse: string) {
+  const cleaned = cleanVerseText(apiReference)
+  if (cleaned && !cleaned.includes('None')) return cleaned
+  const book = cleanVerseText(bookName) || cleanVerseText(bookId)
+  const position = chapter && verse ? `${chapter}:${verse}` : ''
+  return [book, position].filter(Boolean).join(' ').trim() || 'Versículo'
+}
+
+function cleanVerseText(text: string) {
+  const normalized = text
+    .replace(/\u0000/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  return normalized
+    .replace(/Ã/g, 'Á')
+    .replace(/Ã‰/g, 'É')
+    .replace(/Ã/g, 'Í')
+    .replace(/Ã“/g, 'Ó')
+    .replace(/Ãš/g, 'Ú')
+    .replace(/Ã‘/g, 'Ñ')
+    .replace(/Ã¡/g, 'á')
+    .replace(/Ã©/g, 'é')
+    .replace(/Ã­/g, 'í')
+    .replace(/Ã³/g, 'ó')
+    .replace(/Ãº/g, 'ú')
+    .replace(/Ã±/g, 'ñ')
+    .replace(/Â¿/g, '¿')
+    .replace(/Â¡/g, '¡')
+    .replace(/â€œ/g, '“')
+    .replace(/â€/g, '”')
+    .replace(/â€˜/g, '‘')
+    .replace(/â€™/g, '’')
+    .replace(/â€“/g, '–')
+    .replace(/â€”/g, '—')
+}
 
 // ============================================
 // OBTENER ACCESS TOKEN DESDE SERVICE ACCOUNT

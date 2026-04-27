@@ -2,7 +2,7 @@ import 'dart:developer';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
-import 'supabase_service.dart';
+import 'bible_verse_service.dart';
 import 'notification_controller.dart';
 
 const String fetchQuoteTask = 'fetchQuoteTask';
@@ -24,16 +24,14 @@ void callbackDispatcher() {
   Workmanager().executeTask((task, inputData) async {
     try {
       log('Background task executed: $task');
-      final svc = SupabaseService();
-      await svc.init();
-      final quote = await svc.fetchRandomQuote();
-      if (quote != null) {
-        log('Quote: ${quote.text} — ${quote.author}');
+      final verse = await BibleVerseService().fetchRandomVerse();
+      if (verse.text.isNotEmpty) {
+        log('Verse: ${verse.text} — ${verse.reference}');
         try {
           // Try to show the native notification via MethodChannel.
           await NotificationController.showNotification(
-            quote.text,
-            quote.author,
+            verse.text,
+            verse.reference,
           );
         } catch (e) {
           log('Failed to show notification via MethodChannel: $e');

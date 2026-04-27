@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:uuid/uuid.dart';
 
+import '../constants.dart';
 import 'notification_controller.dart';
 
 /// Intervalos disponibles para notificaciones
@@ -83,6 +85,8 @@ class FirebaseMessagingService {
       } catch (e) {
         debugPrint('Firebase: Token error (non-blocking): $e');
       }
+
+      await registerDevice();
 
       // Listen for token refresh
       FirebaseMessaging.instance.onTokenRefresh.listen(_onTokenRefresh);
@@ -163,54 +167,90 @@ class FirebaseMessagingService {
     await prefs.setInt('interval_seconds', intervalSeconds);
   }
 
+  static Future<bool> _ensureSupabaseClient() async {
+    try {
+      final client = Supabase.instance.client;
+      if (client != null) {
+        return true;
+      }
+    } catch (_) {
+      // not initialized yet
+    }
+
+    try {
+      debugPrint('Initializing Supabase for device registration...');
+      await Supabase.initialize(url: kSupabaseUrl, anonKey: kSupabaseAnonKey);
+      return true;
+    } catch (e) {
+      debugPrint('Supabase init failed: $e');
+      return false;
+    }
+  }
+
+  static String _normalizeText(String text) {
+    if (text.isEmpty) return text;
+    final bytes = latin1.encode(text);
+    final utf8Text = utf8.decode(bytes, allowMalformed: true);
+    return utf8Text
+        .replaceAll('\u0000', '')
+        .replaceAll(RegExp(r'\s+'), ' ')
+        .trim()
+        .replaceAll('Ã', 'Á')
+        .replaceAll('Ã‰', 'É')
+        .replaceAll('Ã', 'Í')
+        .replaceAll('Ã“', 'Ó')
+        .replaceAll('Ãš', 'Ú')
+        .replaceAll('Ã‘', 'Ñ')
+        .replaceAll('Ã¡', 'á')
+        .replaceAll('Ã©', 'é')
+        .replaceAll('Ã­', 'í')
+        .replaceAll('Ã³', 'ó')
+        .replaceAll('Ãº', 'ú')
+        .replaceAll('Ã±', 'ñ')
+        .replaceAll('Â¿', '¿')
+        .replaceAll('Â¡', '¡')
+        .replaceAll('â€œ', '“')
+        .replaceAll('â€', '”')
+        .replaceAll('â€˜', '‘')
+        .replaceAll('â€™', '’')
+        .replaceAll('â€“', '–')
+        .replaceAll('â€”', '—');
+  }
+
   /// Guardar dispositivo con token en Supabase
   static Future<bool> _saveTokenToSupabase(String token) async {
+    return _upsertDevice(token: token);
+  }
+
+  static Future<bool> _upsertDevice({
+    String? token,
+    int? intervalSeconds,
+  }) async {
     try {
-      // Obtener cliente de Supabase, inicializar si es necesario
-      SupabaseClient? client;
-      try {
-        client = Supabase.instance.client;
-      } catch (_) {
-        // No inicializado aún
-      }
-
-      if (client == null) {
-        // Inicializar Supabase
-        debugPrint('Initializing Supabase for device registration...');
-        const supabaseUrl = 'https://fyvxjooydebbpjcmxeev.supabase.co';
-        const supabaseAnonKey =
-            'sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM';
-
-        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-        client = Supabase.instance.client;
-      }
-
-      if (client == null) {
-        debugPrint('ERROR: No se pudo obtener cliente de Supabase');
+      final ready = await _ensureSupabaseClient();
+      if (!ready) {
+        debugPrint('ERROR: No se pudo inicializar Supabase');
         return false;
       }
 
+      final client = Supabase.instance.client;
       final deviceId = await _getOrCreateDeviceId();
-      final intervalSeconds = await _getStoredInterval();
-
-      debugPrint(
-        'Registering device $deviceId with interval $intervalSeconds seconds',
-      );
+      final interval = intervalSeconds ?? await _getStoredInterval();
 
       final response = await client.from('devices').upsert({
         'id': deviceId,
         'fcm_token': token,
         'platform': Platform.isAndroid ? 'android' : 'ios',
-        'interval_seconds': intervalSeconds,
+        'interval_seconds': interval,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'id').select();
 
       debugPrint(
-        'Device saved to Supabase: $deviceId (interval: ${intervalSeconds}s) - Response: $response',
+        'Device upsert: $deviceId (interval: ${interval}s, token:${token != null}) - Response: $response',
       );
       return response != null;
     } catch (e, st) {
-      debugPrint('Error saving device to Supabase: $e - $st');
+      debugPrint('Error upserting device in Supabase: $e - $st');
       return false;
     }
   }
@@ -218,23 +258,8 @@ class FirebaseMessagingService {
   /// Actualizar intervalo de notificaciones
   static Future<void> updateIntervalPreference(int intervalSeconds) async {
     try {
-      // Obtener cliente de Supabase, inicializar si es necesario
-      SupabaseClient? client;
-      try {
-        client = Supabase.instance.client;
-      } catch (_) {
-        // No inicializado aún
-      }
-
-      if (client == null) {
-        // Inicializar Supabase si no está inicializado
-        debugPrint('Supabase not initialized, initializing...');
-        const supabaseUrl = 'https://fyvxjooydebbpjcmxeev.supabase.co';
-        const supabaseAnonKey =
-            'sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM';
-        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
-        client = Supabase.instance.client;
-      }
+      final ready = await _ensureSupabaseClient();
+      if (!ready) return;
 
       final deviceId = await _getOrCreateDeviceId();
       debugPrint('Updating interval for device: $deviceId');
@@ -255,22 +280,7 @@ class FirebaseMessagingService {
       // Guardar localmente
       await _storeIntervalLocally(intervalSeconds);
 
-      // Guardar en Supabase solo si tenemos token
-      if (_currentToken != null) {
-        final response = await client.from('devices').upsert({
-          'id': deviceId,
-          'fcm_token': _currentToken,
-          'interval_seconds': intervalSeconds,
-          'updated_at': DateTime.now().toIso8601String(),
-          'platform': Platform.isAndroid ? 'android' : 'ios',
-        }, onConflict: 'id').select();
-
-        debugPrint(
-          'Interval updated: $intervalSeconds seconds - Response: $response',
-        );
-      } else {
-        debugPrint('WARNING: No FCM token available, skipping Supabase save');
-      }
+      await _upsertDevice(token: _currentToken, intervalSeconds: intervalSeconds);
     } catch (e, st) {
       debugPrint('Error updating interval: $e - $st');
     }
@@ -301,42 +311,25 @@ class FirebaseMessagingService {
   /// Register device in Supabase - call this when app starts
   static Future<bool> registerDevice() async {
     try {
-      // Initialize Supabase if needed
-      try {
-        Supabase.instance.client;
-      } catch (_) {
-        await Supabase.initialize(
-          url: 'https://fyvxjooydebbpjcmxeev.supabase.co',
-          anonKey: 'sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM',
-        );
-      }
+      final ready = await _ensureSupabaseClient();
+      if (!ready) return false;
 
       // Get or create device ID
       final deviceId = await _getOrCreateDeviceId();
 
-      // Get FCM token
+      // Get FCM token (can be null on first attempts)
       final token = await _getToken();
-      if (token == null) {
-        debugPrint('registerDevice: No FCM token available');
-        return false;
-      }
-
       _currentToken = token;
 
       // Get stored interval
       final intervalSeconds = await _getStoredInterval();
 
-      // Save to Supabase
-      final client = Supabase.instance.client;
-      await client.from('devices').upsert({
-        'id': deviceId,
-        'fcm_token': token,
-        'platform': Platform.isAndroid ? 'android' : 'ios',
-        'interval_seconds': intervalSeconds,
-        'updated_at': DateTime.now().toIso8601String(),
-      }, onConflict: 'id').select();
+      // Save to Supabase even when token is null (keeps row alive)
+      await _upsertDevice(token: token, intervalSeconds: intervalSeconds);
 
-      debugPrint('Device registered successfully: $deviceId');
+      debugPrint(
+        'Device registered/upserted: $deviceId (token:${token != null})',
+      );
       return true;
     } catch (e, st) {
       debugPrint('Error registering device: $e - $st');
@@ -347,20 +340,14 @@ class FirebaseMessagingService {
   /// Desactivar notificaciones (borrar token)
   static Future<void> disableNotifications() async {
     try {
-      final deviceId = await _getOrCreateDeviceId();
-      final client = Supabase.instance.client;
-
-      if (client != null) {
-        await client
-            .from('devices')
-            .update({
-              'fcm_token': null,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('id', deviceId);
+      final ready = await _ensureSupabaseClient();
+      if (!ready) {
+        await _storeIntervalLocally(0);
+        return;
       }
 
       await _storeIntervalLocally(0); // 0 = desactivado
+      await _upsertDevice(token: null, intervalSeconds: 0);
       debugPrint('Notifications disabled');
     } catch (e) {
       debugPrint('Error disabling notifications: $e');
@@ -373,6 +360,7 @@ class FirebaseMessagingService {
     if (token != null) {
       _currentToken = token;
       await _storeIntervalLocally(NotificationIntervals.getDefault());
+      await registerDevice();
       await _saveTokenToSupabase(token);
     }
   }
@@ -380,6 +368,7 @@ class FirebaseMessagingService {
   static Future<void> _onTokenRefresh(String token) async {
     debugPrint('FCM Token refreshed: $token');
     _currentToken = token;
+    await registerDevice();
     await _saveTokenToSupabase(token);
   }
 
@@ -387,14 +376,21 @@ class FirebaseMessagingService {
     debugPrint('Received foreground message: ${message.notification?.title}');
 
     final data = message.data;
-    final text = data['text'] as String? ?? message.notification?.body ?? '';
-    final author = data['author'] as String? ?? 'Unknown';
+    final rawText = data['text'] as String? ?? message.notification?.body ?? '';
+    final rawAuthor = data['author'] as String? ??
+        data['reference'] as String? ??
+        'Unknown';
+
+    final text = _normalizeText(rawText);
+    final author = _normalizeText(rawAuthor);
 
     NotificationController.showNotification(text, author);
+    unawaited(registerDevice());
   }
 
   static void _handleMessageOpenedApp(RemoteMessage message) {
     debugPrint('App opened from notification: ${message.notification?.title}');
+    unawaited(registerDevice());
     _processMessage(message);
   }
 
@@ -402,6 +398,7 @@ class FirebaseMessagingService {
     debugPrint(
       'App launched from notification: ${message.notification?.title}',
     );
+    unawaited(registerDevice());
     _processMessage(message);
   }
 

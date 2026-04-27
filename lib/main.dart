@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/supabase_service.dart';
+import 'services/bible_verse_service.dart';
 import 'services/notification_controller.dart';
 import 'services/firebase_messaging_service.dart';
 import 'screens/settings_screen.dart';
@@ -18,16 +18,11 @@ Future<void> main() async {
 }
 
 Future<void> _initializeServicesInBackground() async {
-  // Initialize Supabase (non-blocking)
-  try {
-    await SupabaseService().init();
-    debugPrint('Supabase initialized successfully');
-  } catch (e) {
-    debugPrint('Supabase initialization failed: $e');
-  }
-
-  // Start Firebase in background (don't await completion)
+  // Start FCM in background (don't await completion)
   FirebaseMessagingService.initialize();
+
+  // Ensure device registration for Supabase notifications
+  await FirebaseMessagingService.registerDevice();
 
   // Register device with a small delay to let Firebase get token
   // This is the same logic that works when changing interval
@@ -91,7 +86,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   bool _isLoading = true;
-  bool _alarmScheduled = false;
 
   @override
   void initState() {
@@ -113,8 +107,11 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         'HomeScreen: Current interval = ${settings.intervalSeconds} seconds (${settings.intervalSeconds ~/ 60} min)',
       );
 
-      // Schedule alarm in background - don't await to avoid blocking UI
-      _scheduleAlarmInBackground(settings.intervalSeconds);
+      // Programar alarma local al iniciar (si hay notificaciones habilitadas)
+      if (settings.notificationsEnabled) {
+        await NotificationController.scheduleAlarm(settings.intervalSeconds);
+        debugPrint('Alarm scheduled at startup');
+      }
     } catch (e) {
       debugPrint('Error loading settings: $e');
     } finally {
@@ -122,18 +119,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
-    }
-  }
-
-  Future<void> _scheduleAlarmInBackground(int intervalSeconds) async {
-    try {
-      await NotificationController.scheduleAlarm(intervalSeconds);
-      debugPrint('HomeScreen: Alarm scheduled');
-    } catch (e) {
-      debugPrint('Error scheduling alarm: $e');
-    }
-    if (mounted) {
-      setState(() => _alarmScheduled = true);
     }
   }
 
@@ -152,10 +137,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    // Re-register alarm when interval changes
+    // Notificaciones locales cuando cambia el intervalo
     ref.listen<SettingsState>(settingsProvider, (previous, next) {
       if (previous?.intervalSeconds != next.intervalSeconds) {
-        NotificationController.scheduleAlarm(next.intervalSeconds);
+        // Programar alarma local cuando cambia el intervalo
+        if (next.notificationsEnabled) {
+          NotificationController.scheduleAlarm(next.intervalSeconds);
+          debugPrint('Alarm rescheduled for ${next.intervalSeconds} seconds');
+        }
       }
     });
 
@@ -188,7 +177,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           child: Column(
             children: [
               const Spacer(),
-              // Main card with quote
+              // Main card with verse
               Card(
                 color: colorScheme.primaryContainer,
                 child: Padding(
@@ -196,7 +185,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   child: Column(
                     children: [
                       Icon(
-                        Icons.format_quote,
+                        Icons.auto_stories,
                         size: 48,
                         color: colorScheme.onPrimaryContainer.withValues(
                           alpha: 0.5,
@@ -214,7 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Recibe quotes motivacionales\nautomáticamente',
+                        'Recibe versículos bíblicos\nautomáticamente',
                         style: TextStyle(
                           fontSize: 14,
                           color: colorScheme.onPrimaryContainer.withValues(
@@ -262,40 +251,31 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // Add quote button
-              FilledButton.tonalIcon(
-                onPressed: () => _showAddQuoteDialog(context),
-                icon: const Icon(Icons.add),
-                label: const Text('Añadir'),
-              ),
-
-              const Spacer(),
-
-              // Show quote now button
+              // Show verse now button
               FilledButton.icon(
                 onPressed: () async {
-                  final svc = SupabaseService();
-                  await svc.init();
-                  final q = await svc.fetchRandomQuote();
-                  if (q != null) {
+                  try {
+                    final verse = await BibleVerseService().fetchRandomVerse(
+                      allowFallback: false,
+                    );
                     await NotificationController.showNotification(
-                      q.text,
-                      q.author,
+                      verse.text,
+                      verse.reference,
                     );
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('Quote enviada!'),
+                          content: const Text('Versículo enviado!'),
                           behavior: SnackBarBehavior.floating,
                           backgroundColor: colorScheme.primary,
                         ),
                       );
                     }
-                  } else {
+                  } catch (_) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('No quote found'),
+                          content: const Text('No se pudo obtener un versículo nuevo'),
                           behavior: SnackBarBehavior.floating,
                           backgroundColor: colorScheme.error,
                         ),
@@ -304,7 +284,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   }
                 },
                 icon: const Icon(Icons.send),
-                label: const Text('Show quote now'),
+                label: const Text('Mostrar versículo'),
               ),
 
               const SizedBox(height: 16),
@@ -342,95 +322,4 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     }
   }
 
-  Future<void> _showAddQuoteDialog(BuildContext context) async {
-    final textController = TextEditingController();
-    final authorController = TextEditingController();
-    final colorScheme = Theme.of(context).colorScheme;
-    bool isLoading = false;
-
-    final result = await showDialog<bool>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Añadir Quote'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: textController,
-                decoration: const InputDecoration(
-                  labelText: 'Quote',
-                  hintText: 'Ingresa el quote',
-                  border: OutlineInputBorder(),
-                ),
-                maxLines: 3,
-                textCapitalization: TextCapitalization.sentences,
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: authorController,
-                decoration: const InputDecoration(
-                  labelText: 'Autor',
-                  hintText: 'Ingresa el autor',
-                  border: OutlineInputBorder(),
-                ),
-                textCapitalization: TextCapitalization.words,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: isLoading
-                  ? null
-                  : () => Navigator.of(context).pop(false),
-              child: const Text('Cancelar'),
-            ),
-            FilledButton(
-              onPressed: isLoading
-                  ? null
-                  : () async {
-                      if (textController.text.trim().isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('El quote no puede estar vacío'),
-                          ),
-                        );
-                        return;
-                      }
-                      setState(() => isLoading = true);
-
-                      final supabase = SupabaseService();
-                      await supabase.init();
-                      final success = await supabase.saveQuote(
-                        textController.text.trim(),
-                        authorController.text.trim(),
-                      );
-
-                      if (context.mounted) {
-                        Navigator.of(context).pop(true);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text(
-                              success ? 'Quote guardado!' : 'Error al guardar',
-                            ),
-                            backgroundColor: success
-                                ? colorScheme.primary
-                                : colorScheme.error,
-                          ),
-                        );
-                      }
-                    },
-              child: isLoading
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Guardar'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }

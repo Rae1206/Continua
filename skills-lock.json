@@ -1,0 +1,40 @@
+{
+  "version": 1,
+  "skills": {
+    "accessibility": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "bffe3d08cfe92ebad63699f74ce29e35c19850ebfbf474c1463183cfe34d6a09"
+    },
+    "dart-best-practices": {
+      "source": "kevmoo/dash_skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "37da3773e51308a56bfc011659ba609b658be3308f9282b4e4d028da88bdeba2"
+    },
+    "flutter-animations": {
+      "source": "madteacher/mad-agents-skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "ff6955a4ec2b970ccce808be4dd0cca08056b2b8b303792d1f22b48aa7847dd3"
+    },
+    "flutter-expert": {
+      "source": "jeffallan/claude-skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "0857b95c53a388f79c08b2410818cb97a66d1ae196f20cef6a29a15c7102ab2f"
+    },
+    "flutter-testing": {
+      "source": "madteacher/mad-agents-skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "544834b3035c2cf24169f52a9ae605b7e7776c1d078b6f76545d5a53d1350dbc"
+    },
+    "frontend-design": {
+      "source": "anthropics/skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "82fb11a63fb1e35ee2469516ed02d54695f783115b1540c0e783197af4240a3a"
+    },
+    "seo": {
+      "source": "addyosmani/web-quality-skills",
+      "sourceType": "autoskills-registry",
+      "computedHash": "c184da724d1c61ad077f27418ea8e7e88fd54bcdf98165e18be7e4681cbd5e20"
+    }
+  }
+}

@@ -7,6 +7,13 @@ import '../providers/settings_provider.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  Duration _pickerDurationFromSeconds(int totalSeconds) {
+    final clamped = totalSeconds < 60 ? 60 : totalSeconds;
+    final hours = (clamped ~/ 3600) % 24;
+    final minutes = (clamped % 3600) ~/ 60;
+    return Duration(hours: hours, minutes: minutes);
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settings = ref.watch(settingsProvider);
@@ -58,9 +65,9 @@ class SettingsScreen extends ConsumerWidget {
                             'Notificaciones',
                             style: Theme.of(context).textTheme.titleMedium,
                           ),
-                          Text(
+                            Text(
                             settings.notificationsEnabled
-                                ? 'Activas - Recibirás quotes motivacionales'
+                                ? 'Activas - Recibirás versículos bíblicos'
                                 : 'Desactivadas',
                             style: Theme.of(
                               context,
@@ -84,14 +91,14 @@ class SettingsScreen extends ConsumerWidget {
 
             // Frecuencia de notificaciones
             Text(
-              'Frecuencia de quotes',
+              'Frecuencia de versículos',
               style: Theme.of(
                 context,
               ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 8),
             Text(
-              '¿Con qué frecuencia quieres recibir inspiraciones?',
+              '¿Con qué frecuencia quieres recibir versículos?',
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: Colors.grey),
@@ -137,8 +144,8 @@ class SettingsScreen extends ConsumerWidget {
                     height: 200,
                     child: CupertinoTimerPicker(
                       mode: CupertinoTimerPickerMode.hm,
-                      initialTimerDuration: Duration(
-                        seconds: settings.intervalSeconds,
+                      initialTimerDuration: _pickerDurationFromSeconds(
+                        settings.intervalSeconds,
                       ),
                       onTimerDurationChanged: (Duration duration) {
                         if (settings.notificationsEnabled) {
