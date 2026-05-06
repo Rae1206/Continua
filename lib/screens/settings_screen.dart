@@ -190,7 +190,7 @@ class SettingsScreen extends ConsumerWidget {
             const SizedBox(height: 16),
 
             // Categorías de quotes
-            const quoteCategories = {
+            final quoteCategories = const {
               'philosophy': '🧠 Filosofía',
               'science': '🔬 Ciencia',
               'technology': '💡 Tecnología',
