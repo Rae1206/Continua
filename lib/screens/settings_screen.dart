@@ -173,6 +173,81 @@ class SettingsScreen extends ConsumerWidget {
 
             const SizedBox(height: 16),
 
+            // Categorías de inspiración
+            Text(
+              'Categorías de inspiración',
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Seleccioná los temas que te interesan',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+
+            // Categorías de quotes
+            const quoteCategories = {
+              'philosophy': '🧠 Filosofía',
+              'science': '🔬 Ciencia',
+              'technology': '💡 Tecnología',
+              'business': '💼 Negocios',
+              'history': '📜 Historia',
+              'wisdom': '🦉 Sabiduría',
+              'famous-quotes': '⭐ Famosas',
+              'motivation': '🔥 Motivación',
+            };
+
+            Container(
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              padding: const EdgeInsets.all(12),
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: quoteCategories.entries.map((entry) {
+                  final isSelected =
+                      settings.preferredTags.contains(entry.key);
+                  return ChoiceChip(
+                    label: Text(entry.value),
+                    selected: isSelected,
+                    onSelected: settings.notificationsEnabled
+                        ? (selected) {
+                            final updatedTags = selected
+                                ? [...settings.preferredTags, entry.key]
+                                : settings.preferredTags
+                                    .where((t) => t != entry.key)
+                                    .toList();
+                            notifier.setPreferredTags(updatedTags);
+                          }
+                        : null,
+                    selectedColor:
+                        Theme.of(context).primaryColor.withValues(alpha: 0.2),
+                    side: BorderSide(
+                      color: isSelected
+                          ? Theme.of(context).primaryColor
+                          : Colors.grey.shade300,
+                    ),
+                    labelStyle: TextStyle(
+                      color: isSelected
+                          ? Theme.of(context).primaryColor
+                          : (settings.notificationsEnabled
+                                ? null
+                                : Colors.grey),
+                      fontWeight: isSelected ? FontWeight.bold : null,
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+
+            const SizedBox(height: 16),
+
             // Opciones rápidas
             Container(
               decoration: BoxDecoration(

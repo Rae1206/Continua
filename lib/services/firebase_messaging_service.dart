@@ -161,6 +161,12 @@ class FirebaseMessagingService {
         NotificationIntervals.getDefault();
   }
 
+  /// Obtener tags preferidos guardados localmente
+  static Future<List<String>> _getStoredPreferredTags() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getStringList('preferred_tags') ?? [];
+  }
+
   /// Guardar intervalo localmente
   static Future<void> _storeIntervalLocally(int intervalSeconds) async {
     final prefs = await SharedPreferences.getInstance();
@@ -236,12 +242,18 @@ class FirebaseMessagingService {
       final client = Supabase.instance.client;
       final deviceId = await _getOrCreateDeviceId();
       final interval = intervalSeconds ?? await _getStoredInterval();
+      final preferredTags = await _getStoredPreferredTags();
+
+      debugPrint(
+        'Registering device $deviceId with interval $interval seconds',
+      );
 
       final response = await client.from('devices').upsert({
         'id': deviceId,
         'fcm_token': token,
         'platform': Platform.isAndroid ? 'android' : 'ios',
         'interval_seconds': interval,
+        'preferred_tags': preferredTags,
         'updated_at': DateTime.now().toIso8601String(),
       }, onConflict: 'id').select();
 
@@ -283,6 +295,54 @@ class FirebaseMessagingService {
       await _upsertDevice(token: _currentToken, intervalSeconds: intervalSeconds);
     } catch (e, st) {
       debugPrint('Error updating interval: $e - $st');
+    }
+  }
+
+  /// Actualizar tags preferidos en Supabase
+  static Future<void> updatePreferredTags(List<String> tags) async {
+    try {
+      SupabaseClient? client;
+      try {
+        client = Supabase.instance.client;
+      } catch (_) {
+        debugPrint('Supabase not initialized, initializing...');
+        const supabaseUrl = 'https://fyvxjooydebbpjcmxeev.supabase.co';
+        const supabaseAnonKey =
+            'sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM';
+        await Supabase.initialize(url: supabaseUrl, anonKey: supabaseAnonKey);
+        client = Supabase.instance.client;
+      }
+
+      final deviceId = await _getOrCreateDeviceId();
+      debugPrint('Updating preferred tags for device: $deviceId');
+
+      if (_currentToken == null) {
+        debugPrint('No FCM token, attempting to get one...');
+        for (int i = 0; i < 3; i++) {
+          await Future.delayed(Duration(seconds: i + 1));
+          _currentToken = await _getToken();
+          if (_currentToken != null) {
+            debugPrint('FCM token obtained after ${i + 1} attempts');
+            break;
+          }
+        }
+      }
+
+      if (_currentToken != null) {
+        final response = await client.from('devices').upsert({
+          'id': deviceId,
+          'fcm_token': _currentToken,
+          'preferred_tags': tags,
+          'updated_at': DateTime.now().toIso8601String(),
+          'platform': Platform.isAndroid ? 'android' : 'ios',
+        }, onConflict: 'id').select();
+
+        debugPrint('Preferred tags updated: $tags - Response: $response');
+      } else {
+        debugPrint('WARNING: No FCM token available, skipping Supabase save');
+      }
+    } catch (e, st) {
+      debugPrint('Error updating preferred tags: $e - $st');
     }
   }
 
@@ -383,6 +443,9 @@ class FirebaseMessagingService {
 
     final text = _normalizeText(rawText);
     final author = _normalizeText(rawAuthor);
+    final primaryTag = data['primary_tag'] as String?;
+
+    debugPrint('Foreground message tag: $primaryTag');
 
     NotificationController.showNotification(text, author);
     unawaited(registerDevice());

@@ -7,16 +7,23 @@ import '../services/notification_controller.dart';
 class SettingsState {
   final int intervalSeconds;
   final bool notificationsEnabled;
+  final List<String> preferredTags;
 
   SettingsState({
     required this.intervalSeconds,
     required this.notificationsEnabled,
+    this.preferredTags = const [],
   });
 
-  SettingsState copyWith({int? intervalSeconds, bool? notificationsEnabled}) =>
+  SettingsState copyWith({
+    int? intervalSeconds,
+    bool? notificationsEnabled,
+    List<String>? preferredTags,
+  }) =>
       SettingsState(
         intervalSeconds: intervalSeconds ?? this.intervalSeconds,
         notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
+        preferredTags: preferredTags ?? this.preferredTags,
       );
 
   /// Obtener texto del intervalo
@@ -33,6 +40,7 @@ class SettingsState {
 class SettingsNotifier extends StateNotifier<SettingsState> {
   static const _prefsKeyInterval = 'interval_seconds';
   static const _prefsKeyEnabled = 'notifications_enabled';
+  static const _prefsKeyTags = 'preferred_tags';
 
   SettingsNotifier()
     : super(
@@ -47,10 +55,12 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     final interval =
         prefs.getInt(_prefsKeyInterval) ?? NotificationIntervals.getDefault();
     final enabled = prefs.getBool(_prefsKeyEnabled) ?? true;
+    final tags = prefs.getStringList(_prefsKeyTags) ?? [];
 
     state = state.copyWith(
       intervalSeconds: interval,
       notificationsEnabled: enabled,
+      preferredTags: tags,
     );
   }
 
@@ -85,6 +95,18 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
       await FirebaseMessagingService.enableNotifications();
     } else {
       await FirebaseMessagingService.disableNotifications();
+    }
+  }
+
+  /// Actualizar tags/categorías preferidas
+  Future<void> setPreferredTags(List<String> tags) async {
+    state = state.copyWith(preferredTags: tags);
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(_prefsKeyTags, tags);
+
+    if (state.notificationsEnabled) {
+      await FirebaseMessagingService.updatePreferredTags(tags);
     }
   }
 }

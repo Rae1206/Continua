@@ -15,7 +15,6 @@ Deno.serve(async (req) => {
 
   try {
     const { createClient } = await import('npm:@supabase/supabase-js@2')
-    const bibleVerse = await fetchRandomVerse()
 
     // ============================================
     // OBTENER ACCESS TOKEN DESDE SERVICE ACCOUNT
@@ -44,7 +43,7 @@ Deno.serve(async (req) => {
     // 1. Obtener dispositivos
     const { data: devices, error: devicesError } = await supabase
       .from('devices')
-      .select('id, fcm_token, platform, interval_seconds, last_notified_at')
+      .select('id, fcm_token, platform, interval_seconds, last_notified_at, preferred_tags')
       .not('fcm_token', 'is', null)
 
     if (devicesError) {
@@ -83,18 +82,65 @@ Deno.serve(async (req) => {
       )
     }
 
+
+    // 3. Obtener quote aleatoria con filtrado por tags preferidos del dispositivo
+    const quoteResults: Record<string, any> = {}
+
+    for (const device of devicesToNotify) {
+      let selectedQuote: any = null
+
+      // Intentar obtener quote con tags preferidos del dispositivo
+      if (device.preferred_tags && device.preferred_tags.length > 0) {
+        const { data: taggedQuotes } = await supabase
+          .from('quotes')
+          .select('id, text, author, tags')
+          .overlaps('tags', device.preferred_tags)
+          .order('random()')
+          .limit(1)
+
+        if (taggedQuotes && taggedQuotes.length > 0) {
+          selectedQuote = taggedQuotes[0]
+        }
+      }
+
+      // Fallback: cualquier quote random
+      if (!selectedQuote) {
+        const { data: fallbackQuotes } = await supabase
+          .from('quotes')
+          .select('id, text, author, tags')
+          .order('random()')
+          .limit(1)
+
+        if (fallbackQuotes && fallbackQuotes.length > 0) {
+          selectedQuote = fallbackQuotes[0]
+        }
+      }
+
+      if (selectedQuote) {
+        quoteResults[device.id] = selectedQuote
+      }
+    }
+
     // 4. Enviar notificaciones usando FCM v1 API
     const fcmUrl = 'https://fcm.googleapis.com/v1/projects/keepgoing-3344f/messages:send'
 
     const results = await Promise.allSettled(
       devicesToNotify.map(async (device: any) => {
-        const title = bibleVerse.reference
-          ? `Versículo de ${bibleVerse.reference}`
-          : 'Keep Going 💪'
-        
-        const body = bibleVerse.text.length > 100 
-          ? bibleVerse.text.substring(0, 100) + '...'
-          : bibleVerse.text
+        const quote = quoteResults[device.id]
+        if (!quote) {
+          return { deviceId: device.id, success: false, error: 'No quote available' }
+        }
+
+        const primaryTag = quote.tags && quote.tags.length > 0 ? quote.tags[0] : 'general'
+
+        const title = quote.author
+          ? `💡 ${quote.author}`
+          : '💡 Keep Going'
+
+        const bodyText = quote.text.length > 100
+          ? quote.text.substring(0, 100) + '...'
+          : quote.text
+        const body = '\u201C' + bodyText + '\u201D'
 
         try {
           const fcmResponse = await fetch(fcmUrl, {
@@ -111,10 +157,9 @@ Deno.serve(async (req) => {
                   body
                 },
                 data: {
-                  type: 'verse_notification',
-                  text: bibleVerse.text,
-                  author: bibleVerse.reference,
-                  reference: bibleVerse.reference,
+                  type: 'quote_notification',
+                  quote_id: quote.id,
+                  primary_tag: primaryTag,
                   click_action: 'FLUTTER_NOTIFICATION_CLICK'
                 },
                 android: {
@@ -172,13 +217,18 @@ Deno.serve(async (req) => {
     // Recolectar resultados detallados para debug
     const resultsDetailed = results.map((r: any) => r.status === 'fulfilled' ? r.value : { success: false, error: 'promise rejected' })
 
+    // Obtener una quote de ejemplo para la respuesta
+    const sampleQuote = Object.values(quoteResults)[0] as any
+
     return new Response(
       JSON.stringify({
         message: `Notificaciones: ${successful} enviadas, ${failed} fallidas`,
-        verse: {
-          reference: bibleVerse.reference,
-          text: bibleVerse.text.substring(0, 50)
-        },
+        quote: sampleQuote ? {
+          id: sampleQuote.id,
+          text: sampleQuote.text.substring(0, 50),
+          author: sampleQuote.author,
+          primary_tag: sampleQuote.tags?.[0] || 'general'
+        } : null,
         devices_notified: successful,
         devices_skipped: failed,
         debug_results: resultsDetailed
@@ -201,73 +251,6 @@ Deno.serve(async (req) => {
     )
   }
 })
-
-async function fetchRandomVerse() {
-  const fallback = {
-    reference: 'Filipenses 4:13',
-    text: 'Todo lo puedo en Cristo que me fortalece.'
-  }
-
-  try {
-    const response = await fetch('https://esbiblia.net/api/random/?v=rvr')
-    if (!response.ok) return fallback
-
-    const data = await response.json()
-    const verse = data?.verses?.[0]
-    const text = cleanVerseText(verse?.text?.toString?.() ?? '')
-    const bookId = verse?.book_id?.toString?.() ?? ''
-    const bookName = verse?.book_name?.toString?.() ?? ''
-    const chapter = verse?.chapter?.toString?.() ?? ''
-    const verseNumber = verse?.verse?.toString?.() ?? ''
-    const reference = buildReference(data?.reference?.toString?.() ?? '', bookName, bookId, chapter, verseNumber)
-
-    if (!text) return fallback
-
-    return {
-      reference: reference,
-      text,
-    }
-  } catch (_) {
-    return fallback
-  }
-}
-
-function buildReference(apiReference: string, bookName: string, bookId: string, chapter: string, verse: string) {
-  const cleaned = cleanVerseText(apiReference)
-  if (cleaned && !cleaned.includes('None')) return cleaned
-  const book = cleanVerseText(bookName) || cleanVerseText(bookId)
-  const position = chapter && verse ? `${chapter}:${verse}` : ''
-  return [book, position].filter(Boolean).join(' ').trim() || 'Versículo'
-}
-
-function cleanVerseText(text: string) {
-  const normalized = text
-    .replace(/\u0000/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-
-  return normalized
-    .replace(/Ã/g, 'Á')
-    .replace(/Ã‰/g, 'É')
-    .replace(/Ã/g, 'Í')
-    .replace(/Ã“/g, 'Ó')
-    .replace(/Ãš/g, 'Ú')
-    .replace(/Ã‘/g, 'Ñ')
-    .replace(/Ã¡/g, 'á')
-    .replace(/Ã©/g, 'é')
-    .replace(/Ã­/g, 'í')
-    .replace(/Ã³/g, 'ó')
-    .replace(/Ãº/g, 'ú')
-    .replace(/Ã±/g, 'ñ')
-    .replace(/Â¿/g, '¿')
-    .replace(/Â¡/g, '¡')
-    .replace(/â€œ/g, '“')
-    .replace(/â€/g, '”')
-    .replace(/â€˜/g, '‘')
-    .replace(/â€™/g, '’')
-    .replace(/â€“/g, '–')
-    .replace(/â€”/g, '—')
-}
 
 // ============================================
 // OBTENER ACCESS TOKEN DESDE SERVICE ACCOUNT
