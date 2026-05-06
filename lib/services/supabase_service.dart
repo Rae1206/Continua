@@ -2,6 +2,7 @@ import 'dart:developer' as developer;
 
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../constants.dart';
+import '../models/quote.dart';
 
 class SupabaseService {
   static final SupabaseService _instance = SupabaseService._internal();
@@ -34,6 +35,61 @@ class SupabaseService {
     } catch (e, st) {
       developer.log('Supabase init error: $e', stackTrace: st);
       rethrow;
+    }
+  }
+
+  /// Fetch a list of quotes from the `quotes` table. Returns empty list on no-data.
+  Future<List<Quote>> fetchQuotes({int limit = 100}) async {
+    if (client == null) throw Exception('Supabase not initialized');
+    try {
+      final dynamic raw = await client!.from('quotes').select().limit(limit);
+      if (raw == null) return [];
+
+      if (raw is List<dynamic>) {
+        final list = raw.cast<Map<String, dynamic>>();
+        return list
+            .map((m) => Quote.fromMap(Map<String, dynamic>.from(m)))
+            .toList();
+      }
+
+      if (raw is Map<String, dynamic>) {
+        final inner = raw['data'];
+        if (inner is List) {
+          final list = inner.cast<Map<String, dynamic>>();
+          return list
+              .map((m) => Quote.fromMap(Map<String, dynamic>.from(m)))
+              .toList();
+        }
+      }
+
+      developer.log('Unexpected Supabase response shape: ${raw.runtimeType}');
+      return [];
+    } catch (e, st) {
+      developer.log('fetchQuotes error: $e', stackTrace: st);
+      rethrow;
+    }
+  }
+
+  Future<Quote?> fetchRandomQuote() async {
+    final list = await fetchQuotes(limit: 200);
+    if (list.isEmpty) return null;
+    list.shuffle();
+    return list.first;
+  }
+
+  /// Save a new quote to the database
+  Future<bool> saveQuote(String text, String author) async {
+    if (client == null) {
+      await init();
+      if (client == null) return false;
+    }
+
+    try {
+      await client!.from('quotes').insert({'text': text, 'author': author});
+      return true;
+    } catch (e, st) {
+      developer.log('saveQuote error: $e', stackTrace: st);
+      return false;
     }
   }
 

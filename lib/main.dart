@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'services/bible_verse_service.dart';
+import 'services/supabase_service.dart';
 import 'services/notification_controller.dart';
 import 'services/firebase_messaging_service.dart';
 import 'screens/settings_screen.dart';
@@ -203,7 +203,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Recibe versículos bíblicos\nautomáticamente',
+                        'Recibe quotes motivacionales\nautomáticamente',
                         style: TextStyle(
                           fontSize: 14,
                           color: colorScheme.onPrimaryContainer.withValues(
@@ -251,31 +251,43 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 
               const SizedBox(height: 16),
 
-              // Show verse now button
+              // Show quote now button
               FilledButton.icon(
                 onPressed: () async {
                   try {
-                    final verse = await BibleVerseService().fetchRandomVerse(
-                      allowFallback: false,
-                    );
-                    await NotificationController.showNotification(
-                      verse.text,
-                      verse.reference,
-                    );
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: const Text('Versículo enviado!'),
-                          behavior: SnackBarBehavior.floating,
-                          backgroundColor: colorScheme.primary,
-                        ),
+                    final svc = SupabaseService();
+                    await svc.init();
+                    final quote = await svc.fetchRandomQuote();
+                    if (quote != null) {
+                      await NotificationController.showNotification(
+                        quote.text,
+                        quote.author,
                       );
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('Quote enviada!'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: colorScheme.primary,
+                          ),
+                        );
+                      }
+                    } else {
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: const Text('No se pudo obtener un quote nuevo'),
+                            behavior: SnackBarBehavior.floating,
+                            backgroundColor: colorScheme.error,
+                          ),
+                        );
+                      }
                     }
                   } catch (_) {
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('No se pudo obtener un versículo nuevo'),
+                          content: const Text('No se pudo obtener un quote nuevo'),
                           behavior: SnackBarBehavior.floating,
                           backgroundColor: colorScheme.error,
                         ),
@@ -284,7 +296,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   }
                 },
                 icon: const Icon(Icons.send),
-                label: const Text('Mostrar versículo'),
+                label: const Text('Mostrar quote'),
               ),
 
               const SizedBox(height: 16),
