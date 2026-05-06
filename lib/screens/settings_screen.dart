@@ -7,6 +7,17 @@ import '../providers/settings_provider.dart';
 class SettingsScreen extends ConsumerWidget {
   const SettingsScreen({super.key});
 
+  static const Map<String, String> _quoteCategories = {
+    'philosophy': '🧠 Filosofía',
+    'science': '🔬 Ciencia',
+    'technology': '💡 Tecnología',
+    'business': '💼 Negocios',
+    'history': '📜 Historia',
+    'wisdom': '🦉 Sabiduría',
+    'famous-quotes': '⭐ Famosas',
+    'motivation': '🔥 Motivación',
+  };
+
   Duration _pickerDurationFromSeconds(int totalSeconds) {
     final clamped = totalSeconds < 60 ? 60 : totalSeconds;
     final hours = (clamped ~/ 3600) % 24;
@@ -189,18 +200,6 @@ class SettingsScreen extends ConsumerWidget {
             ),
             const SizedBox(height: 16),
 
-            // Categorías de quotes
-            final quoteCategories = const {
-              'philosophy': '🧠 Filosofía',
-              'science': '🔬 Ciencia',
-              'technology': '💡 Tecnología',
-              'business': '💼 Negocios',
-              'history': '📜 Historia',
-              'wisdom': '🦉 Sabiduría',
-              'famous-quotes': '⭐ Famosas',
-              'motivation': '🔥 Motivación',
-            };
-
             Container(
               decoration: BoxDecoration(
                 color: Theme.of(context).cardColor,
@@ -210,7 +209,7 @@ class SettingsScreen extends ConsumerWidget {
               child: Wrap(
                 spacing: 8,
                 runSpacing: 8,
-                children: quoteCategories.entries.map((entry) {
+                children: _quoteCategories.entries.map((entry) {
                   final isSelected =
                       settings.preferredTags.contains(entry.key);
                   return ChoiceChip(
