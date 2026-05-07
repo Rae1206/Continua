@@ -283,11 +283,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                         );
                       }
                     }
-                  } catch (_) {
+                  } catch (e) {
+                    debugPrint('Error obteniendo quote: $e');
                     if (context.mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: const Text('No se pudo obtener un quote nuevo'),
+                          content: Text('Error: $e'),
                           behavior: SnackBarBehavior.floating,
                           backgroundColor: colorScheme.error,
                         ),
