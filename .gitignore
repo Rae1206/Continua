@@ -102,3 +102,8 @@ android/build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# AI/Agent configuration folders
+.agents/
+.claude/
+.copilot/
