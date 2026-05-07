@@ -4,7 +4,16 @@
 -- Description: Add tags to quotes and devices for personalized notifications
 -- ============================================
 
--- 1. Add tags column to quotes
+-- 0. Create quotes table if it doesn't exist
+CREATE TABLE IF NOT EXISTS quotes (
+  id SERIAL PRIMARY KEY,
+  text TEXT NOT NULL,
+  author TEXT,
+  tags TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT now()
+);
+
+-- 1. Add tags column to quotes (if table existed before)
 ALTER TABLE quotes
   ADD COLUMN IF NOT EXISTS tags TEXT[] DEFAULT '{}';
 
