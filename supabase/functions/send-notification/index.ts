@@ -83,42 +83,40 @@ Deno.serve(async (req) => {
     }
 
 
-    // 3. Obtener quote aleatoria con filtrado por tags preferidos del dispositivo
+    // 3. Obtener todas las quotes una sola vez y asignar aleatoriamente
+    const { data: allQuotes, error: quotesError } = await supabase
+      .from('quotes')
+      .select('id, text, author, tags')
+
+    if (quotesError) {
+      throw new Error(`Error fetching quotes: ${quotesError.message}`)
+    }
+
+    if (!allQuotes || allQuotes.length === 0) {
+      return new Response(
+        JSON.stringify({ message: 'No hay quotes disponibles', sent: 0 }),
+        { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } }
+      )
+    }
+
     const quoteResults: Record<string, any> = {}
 
     for (const device of devicesToNotify) {
-      let selectedQuote: any = null
+      let candidates = allQuotes
 
-      // Intentar obtener quote con tags preferidos del dispositivo
+      // Filtrar por tags preferidos si existen
       if (device.preferred_tags && device.preferred_tags.length > 0) {
-        const { data: taggedQuotes } = await supabase
-          .from('quotes')
-          .select('id, text, author, tags')
-          .overlaps('tags', device.preferred_tags)
-          .order('random()')
-          .limit(1)
-
-        if (taggedQuotes && taggedQuotes.length > 0) {
-          selectedQuote = taggedQuotes[0]
+        const tagged = allQuotes.filter((q: any) =>
+          q.tags && q.tags.some((tag: string) => device.preferred_tags.includes(tag))
+        )
+        if (tagged.length > 0) {
+          candidates = tagged
         }
       }
 
-      // Fallback: cualquier quote random
-      if (!selectedQuote) {
-        const { data: fallbackQuotes } = await supabase
-          .from('quotes')
-          .select('id, text, author, tags')
-          .order('random()')
-          .limit(1)
-
-        if (fallbackQuotes && fallbackQuotes.length > 0) {
-          selectedQuote = fallbackQuotes[0]
-        }
-      }
-
-      if (selectedQuote) {
-        quoteResults[device.id] = selectedQuote
-      }
+      // Elegir una al azar
+      const randomIndex = Math.floor(Math.random() * candidates.length)
+      quoteResults[device.id] = candidates[randomIndex]
     }
 
     // 4. Enviar notificaciones usando FCM v1 API
@@ -158,7 +156,7 @@ Deno.serve(async (req) => {
                 },
                 data: {
                   type: 'quote_notification',
-                  quote_id: quote.id,
+                  quote_id: String(quote.id),
                   primary_tag: primaryTag,
                   click_action: 'FLUTTER_NOTIFICATION_CLICK'
                 },
