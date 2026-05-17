@@ -1,4 +1,4 @@
-package com.example.continua
+package com.keepgoing.app
 
 import android.app.NotificationChannel
 import android.app.NotificationManager

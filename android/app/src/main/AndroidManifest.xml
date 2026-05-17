@@ -16,12 +16,12 @@
     <!-- Reagendar WorkManager después de reinicio del dispositivo -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <application
-        android:label="continua"
+        android:label="Keep Going"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <!-- Supabase credentials for native worker -->
-        <meta-data android:name="supabase_url" android:value="https://fyvxjooydebbpjcmxeev.supabase.co" />
-        <meta-data android:name="supabase_anon_key" android:value="sb_publishable_zjVVfz9hBsivSbpriL_s4g_km1oQkVM" />
+        <meta-data android:name="supabase_url" android:value="https://oezlfzzbsfwaujpwecpk.supabase.co" />
+        <meta-data android:name="supabase_anon_key" android:value="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9lemxmenpic2Z3YXVqcHdlY3BrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcyMzAyODYsImV4cCI6MjA5MjgwNjI4Nn0.5PJNICEbf321blyYONUEVvws9H3frQ5gqaeCeiRwafc" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
